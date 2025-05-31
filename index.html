@@ -6,11 +6,14 @@
   <style>
     body { font-family: Arial; padding: 30px; background: #f4f4f4; }
     h2 { color: #333; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; background: #fff; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    input { padding: 5px; margin-right: 10px; }
-    button { padding: 6px 12px; }
+    input { padding: 5px; margin: 5px; }
+    button { padding: 6px 12px; margin: 5px; }
+    #memberSummary { margin-top: 20px; background: #fff; padding: 10px; border: 1px solid #ccc; }
   </style>
+
+  <!-- 引入 Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
@@ -27,6 +30,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const expensesRef = collection(db, "expenses");
+
     let total = 0;
 
     function createRow(id, name, date, item, amount) {
@@ -44,14 +48,37 @@
       document.getElementById("expenseTable").appendChild(row);
     }
 
-    async function loadExpenses() {
+    async function loadExpenses(month = "") {
+      document.getElementById("expenseTable").innerHTML = "";
+      document.getElementById("memberSummary").innerHTML = "";
+      total = 0;
+      const memberTotals = {};
+
       const querySnapshot = await getDocs(expensesRef);
       querySnapshot.forEach(docSnap => {
         const data = docSnap.data();
-        createRow(docSnap.id, data.name, data.date, data.item, data.amount);
-        total += data.amount;
+        const docDate = new Date(data.date);
+        const docMonth = `${docDate.getFullYear()}-${String(docDate.getMonth() + 1).padStart(2, '0')}`;
+
+        if (!month || docMonth === month) {
+          createRow(docSnap.id, data.name, data.date, data.item, data.amount);
+          total += data.amount;
+          if (!memberTotals[data.name]) memberTotals[data.name] = 0;
+          memberTotals[data.name] += data.amount;
+        }
       });
+
       document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+
+      const summaryEl = document.getElementById("memberSummary");
+      if (Object.keys(memberTotals).length) {
+        let summary = "<strong>成员报销统计：</strong><ul>";
+        for (const [name, amt] of Object.entries(memberTotals)) {
+          summary += `<li>${name}：¥${amt.toFixed(2)}</li>`;
+        }
+        summary += "</ul>";
+        summaryEl.innerHTML = summary;
+      }
     }
 
     window.addExpense = async function () {
@@ -67,11 +94,9 @@
 
       try {
         const docRef = await addDoc(expensesRef, { name, date, item, amount, timestamp: new Date() });
-        createRow(docRef.id, name, date, item, amount);
-        total += amount;
-        document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
         document.getElementById("item").value = "";
         document.getElementById("amount").value = "";
+        loadExpenses(document.getElementById("monthFilter").value); // 重新加载
       } catch (e) {
         console.error("保存失败：", e);
         alert("数据保存失败，请检查网络或权限设置。");
@@ -85,26 +110,48 @@
       const newAmount = parseFloat(prompt("修改金额：", tds[3].innerText.replace("¥", "")));
       if (newItem && !isNaN(newAmount)) {
         await updateDoc(doc(db, "expenses", id), { item: newItem, amount: newAmount });
-        total -= parseFloat(tds[3].innerText.replace("¥", ""));
-        total += newAmount;
-        tds[2].innerText = newItem;
-        tds[3].innerText = `¥${newAmount.toFixed(2)}`;
-        document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+        loadExpenses(document.getElementById("monthFilter").value); // 重新加载
       }
     }
 
     window.deleteExpense = async function (id, btn, amount) {
       if (confirm("确定要删除这条记录吗？")) {
         await deleteDoc(doc(db, "expenses", id));
-        const row = btn.closest("tr");
-        row.remove();
-        total -= amount;
-        document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+        loadExpenses(document.getElementById("monthFilter").value); // 重新加载
       }
     }
 
-    window.onload = loadExpenses;
+    window.filterByMonth = function () {
+      const month = document.getElementById("monthFilter").value;
+      if (!month) return alert("请选择月份！");
+      loadExpenses(month);
+    }
+
+    window.exportToExcel = async function () {
+      const rows = [["姓名", "日期", "内容", "金额(元)"]];
+      const querySnapshot = await getDocs(expensesRef);
+      const selectedMonth = document.getElementById("monthFilter").value;
+
+      querySnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const docDate = new Date(data.date);
+        const docMonth = `${docDate.getFullYear()}-${String(docDate.getMonth() + 1).padStart(2, '0')}`;
+        if (!selectedMonth || docMonth === selectedMonth) {
+          rows.push([data.name, data.date, data.item, data.amount]);
+        }
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "报销数据");
+      XLSX.writeFile(workbook, "员工报销表.xlsx");
+    }
+
+    window.onload = () => loadExpenses();
   </script>
+
+  <!-- SheetJS for Excel Export -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <h2>CHINACNU 员工报销系统</h2>
@@ -116,6 +163,15 @@
     <label>金额：</label><input type="number" id="amount" />
     <button onclick="addExpense()">添加</button>
   </div>
+
+  <div>
+    <label>选择月份：</label>
+    <input type="month" id="monthFilter" />
+    <button onclick="filterByMonth()">筛选</button>
+    <button onclick="exportToExcel()">导出 Excel</button>
+  </div>
+
+  <div id="memberSummary"></div>
 
   <table>
     <thead>
