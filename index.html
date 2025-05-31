@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>CHINACNU 员工报销系统</title>
+  <style>
+    body { font-family: Arial; padding: 30px; background: #f4f4f4; }
+    h2 { color: #333; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    input { padding: 5px; margin-right: 10px; }
+    button { padding: 6px 12px; }
+  </style>
+  <script type="module">
+    // 引入 Firebase SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+    // 你的 Firebase 配置
+    const firebaseConfig = {
+      apiKey: "AIzaSyDjjG4fnHmLQrLJCz6ETi2g513Lww8PlEs",
+      authDomain: "baoxiao-a2630.firebaseapp.com",
+      projectId: "baoxiao-a2630",
+      storageBucket: "baoxiao-a2630.appspot.com",
+      messagingSenderId: "641621196318",
+      appId: "1:641621196318:web:92887c18e578cd9f7c380f"
+    };
+
+    // 初始化 Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 添加报销记录
+    window.addExpense = async function () {
+      const name = document.getElementById("name").value;
+      const date = document.getElementById("date").value;
+      const item = document.getElementById("item").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+
+      if (!name || !date || !item || isNaN(amount)) {
+        alert("请填写所有字段！");
+        return;
+      }
+
+      // 添加到页面表格
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${name}</td><td>${date}</td><td>${item}</td><td>¥${amount.toFixed(2)}</td>`;
+      document.getElementById("expenseTable").appendChild(row);
+
+      // 更新总金额
+      total += amount;
+      document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+
+      // 清空输入框
+      document.getElementById("item").value = "";
+      document.getElementById("amount").value = "";
+
+      // 保存到 Firebase
+      try {
+        await addDoc(collection(db, "expenses"), {
+          name,
+          date,
+          item,
+          amount,
+          timestamp: new Date()
+        });
+        console.log("保存成功");
+      } catch (e) {
+        console.error("保存失败：", e);
+        alert("数据保存失败，请检查网络或权限设置。");
+      }
+    }
+
+    let total = 0;
+  </script>
+</head>
+<body>
+  <h2>CHINACNU 员工报销系统</h2>
+
+  <div>
+    <label>姓名：</label><input type="text" id="name" />
+    <label>日期：</label><input type="date" id="date" />
+    <label>内容：</label><input type="text" id="item" />
+    <label>金额：</label><input type="number" id="amount" />
+    <button onclick="addExpense()">添加</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>姓名</th>
+        <th>日期</th>
+        <th>内容</th>
+        <th>金额 (元)</th>
+      </tr>
+    </thead>
+    <tbody id="expenseTable">
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3"><strong>总计：</strong></td>
+        <td id="total">¥0.00</td>
+      </tr>
+    </tfoot>
+  </table>
+</body>
+</html>
