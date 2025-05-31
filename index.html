@@ -2,18 +2,88 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CHINACNU 员工报销系统</title>
   <style>
-    body { font-family: Arial; padding: 30px; background: #f4f4f4; }
-    h2 { color: #333; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; background: #fff; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    input { padding: 5px; margin: 5px; }
-    button { padding: 6px 12px; margin: 5px; }
-    #memberSummary { margin-top: 20px; background: #fff; padding: 10px; border: 1px solid #ccc; }
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #f0f2f5;
+      padding: 20px;
+      margin: 0;
+    }
+    h2 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    label {
+      display: inline-block;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      background: #1a73e8;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #155fc2;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background-color: #f7f7f7;
+    }
+    #total {
+      font-weight: bold;
+      font-size: 16px;
+    }
+    #memberSummary {
+      margin-top: 20px;
+    }
+
+    @media (min-width: 768px) {
+      .form-group {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .form-group > div {
+        flex: 1;
+        min-width: 150px;
+      }
+      button {
+        width: auto;
+      }
+    }
   </style>
 
-  <!-- 引入 Firebase -->
+  <!-- Firebase + SheetJS -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
@@ -93,10 +163,10 @@
       }
 
       try {
-        const docRef = await addDoc(expensesRef, { name, date, item, amount, timestamp: new Date() });
+        await addDoc(expensesRef, { name, date, item, amount, timestamp: new Date() });
         document.getElementById("item").value = "";
         document.getElementById("amount").value = "";
-        loadExpenses(document.getElementById("monthFilter").value); // 重新加载
+        loadExpenses(document.getElementById("monthFilter").value);
       } catch (e) {
         console.error("保存失败：", e);
         alert("数据保存失败，请检查网络或权限设置。");
@@ -110,14 +180,14 @@
       const newAmount = parseFloat(prompt("修改金额：", tds[3].innerText.replace("¥", "")));
       if (newItem && !isNaN(newAmount)) {
         await updateDoc(doc(db, "expenses", id), { item: newItem, amount: newAmount });
-        loadExpenses(document.getElementById("monthFilter").value); // 重新加载
+        loadExpenses(document.getElementById("monthFilter").value);
       }
     }
 
-    window.deleteExpense = async function (id, btn, amount) {
+    window.deleteExpense = async function (id) {
       if (confirm("确定要删除这条记录吗？")) {
         await deleteDoc(doc(db, "expenses", id));
-        loadExpenses(document.getElementById("monthFilter").value); // 重新加载
+        loadExpenses(document.getElementById("monthFilter").value);
       }
     }
 
@@ -149,48 +219,49 @@
 
     window.onload = () => loadExpenses();
   </script>
-
-  <!-- SheetJS for Excel Export -->
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <h2>CHINACNU 员工报销系统</h2>
 
-  <div>
-    <label>姓名：</label><input type="text" id="name" />
-    <label>日期：</label><input type="date" id="date" />
-    <label>内容：</label><input type="text" id="item" />
-    <label>金额：</label><input type="number" id="amount" />
-    <button onclick="addExpense()">添加</button>
+  <div class="card">
+    <div class="form-group">
+      <div><label>姓名：</label><input type="text" id="name" /></div>
+      <div><label>日期：</label><input type="date" id="date" /></div>
+      <div><label>内容：</label><input type="text" id="item" /></div>
+      <div><label>金额：</label><input type="number" id="amount" /></div>
+      <div><label>&nbsp;</label><button onclick="addExpense()">添加</button></div>
+    </div>
   </div>
 
-  <div>
-    <label>选择月份：</label>
-    <input type="month" id="monthFilter" />
-    <button onclick="filterByMonth()">筛选</button>
-    <button onclick="exportToExcel()">导出 Excel</button>
+  <div class="card">
+    <div class="form-group">
+      <div><label>选择月份：</label><input type="month" id="monthFilter" /></div>
+      <div><label>&nbsp;</label><button onclick="filterByMonth()">筛选</button></div>
+      <div><label>&nbsp;</label><button onclick="exportToExcel()">导出 Excel</button></div>
+    </div>
   </div>
 
-  <div id="memberSummary"></div>
+  <div class="card" id="memberSummary"></div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>姓名</th>
-        <th>日期</th>
-        <th>内容</th>
-        <th>金额 (元)</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="expenseTable">
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="4"><strong>总计：</strong></td>
-        <td id="total">¥0.00</td>
-      </tr>
-    </tfoot>
-  </table>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>姓名</th>
+          <th>日期</th>
+          <th>内容</th>
+          <th>金额 (元)</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="expenseTable"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4">总计：</td>
+          <td id="total">¥0.00</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
 </body>
 </html>
