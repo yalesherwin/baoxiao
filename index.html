@@ -12,11 +12,9 @@
     button { padding: 6px 12px; }
   </style>
   <script type="module">
-    // 引入 Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
-    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 
-    // 你的 Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyDjjG4fnHmLQrLJCz6ETi2g513Lww8PlEs",
       authDomain: "baoxiao-a2630.firebaseapp.com",
@@ -26,11 +24,36 @@
       appId: "1:641621196318:web:92887c18e578cd9f7c380f"
     };
 
-    // 初始化 Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const expensesRef = collection(db, "expenses");
+    let total = 0;
 
-    // 添加报销记录
+    function createRow(id, name, date, item, amount) {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${name}</td>
+        <td>${date}</td>
+        <td>${item}</td>
+        <td>¥${amount.toFixed(2)}</td>
+        <td>
+          <button onclick="editExpense('${id}', this)">编辑</button>
+          <button onclick="deleteExpense('${id}', this, ${amount})">删除</button>
+        </td>
+      `;
+      document.getElementById("expenseTable").appendChild(row);
+    }
+
+    async function loadExpenses() {
+      const querySnapshot = await getDocs(expensesRef);
+      querySnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        createRow(docSnap.id, data.name, data.date, data.item, data.amount);
+        total += data.amount;
+      });
+      document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+    }
+
     window.addExpense = async function () {
       const name = document.getElementById("name").value;
       const date = document.getElementById("date").value;
@@ -42,36 +65,45 @@
         return;
       }
 
-      // 添加到页面表格
-      const row = document.createElement("tr");
-      row.innerHTML = `<td>${name}</td><td>${date}</td><td>${item}</td><td>¥${amount.toFixed(2)}</td>`;
-      document.getElementById("expenseTable").appendChild(row);
-
-      // 更新总金额
-      total += amount;
-      document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
-
-      // 清空输入框
-      document.getElementById("item").value = "";
-      document.getElementById("amount").value = "";
-
-      // 保存到 Firebase
       try {
-        await addDoc(collection(db, "expenses"), {
-          name,
-          date,
-          item,
-          amount,
-          timestamp: new Date()
-        });
-        console.log("保存成功");
+        const docRef = await addDoc(expensesRef, { name, date, item, amount, timestamp: new Date() });
+        createRow(docRef.id, name, date, item, amount);
+        total += amount;
+        document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+        document.getElementById("item").value = "";
+        document.getElementById("amount").value = "";
       } catch (e) {
         console.error("保存失败：", e);
         alert("数据保存失败，请检查网络或权限设置。");
       }
     }
 
-    let total = 0;
+    window.editExpense = async function (id, btn) {
+      const row = btn.closest("tr");
+      const tds = row.querySelectorAll("td");
+      const newItem = prompt("修改内容：", tds[2].innerText);
+      const newAmount = parseFloat(prompt("修改金额：", tds[3].innerText.replace("¥", "")));
+      if (newItem && !isNaN(newAmount)) {
+        await updateDoc(doc(db, "expenses", id), { item: newItem, amount: newAmount });
+        total -= parseFloat(tds[3].innerText.replace("¥", ""));
+        total += newAmount;
+        tds[2].innerText = newItem;
+        tds[3].innerText = `¥${newAmount.toFixed(2)}`;
+        document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+      }
+    }
+
+    window.deleteExpense = async function (id, btn, amount) {
+      if (confirm("确定要删除这条记录吗？")) {
+        await deleteDoc(doc(db, "expenses", id));
+        const row = btn.closest("tr");
+        row.remove();
+        total -= amount;
+        document.getElementById("total").innerText = `¥${total.toFixed(2)}`;
+      }
+    }
+
+    window.onload = loadExpenses;
   </script>
 </head>
 <body>
@@ -92,13 +124,14 @@
         <th>日期</th>
         <th>内容</th>
         <th>金额 (元)</th>
+        <th>操作</th>
       </tr>
     </thead>
     <tbody id="expenseTable">
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="3"><strong>总计：</strong></td>
+        <td colspan="4"><strong>总计：</strong></td>
         <td id="total">¥0.00</td>
       </tr>
     </tfoot>
